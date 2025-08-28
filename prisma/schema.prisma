@@ -1,0 +1,197 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum UserRole {
+  FREE
+  STANDARD
+  PRO
+  ENTERPRISE
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Modèle pour l'authentification via NextAuth
+model Account {
+  id                String  @id @default(cuid())
+  userId            Int
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       Int
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// Modèle principal pour les utilisateurs
+model User {
+  id                      Int      @id @default(autoincrement())
+  username                String?  @unique
+  email                   String   @unique
+  name                    String?
+  emailVerified           DateTime?
+  password                String
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+  role                    UserRole  @default(FREE)
+  planExpiresAt           DateTime? // Date d'expiration du plan
+  verificationCode        String?
+  verificationCodeExpiry  DateTime?
+
+  // Relations pour NextAuth
+  accounts      Account[]
+  sessions      Session[]
+
+  // Relations pour les équipes
+  teamId        Int?
+  team          Team?    @relation("TeamMembers", fields: [teamId], references: [id], onDelete: SetNull)
+  ownedTeam     Team?    @relation("TeamOwner")
+  teamMemberships TeamMember[]
+  invitationsSent TeamInvitation[] @relation("Inviter")
+
+  // Relations pour les ressources
+  links         Link[]
+  apiKeys       ApiKey[]
+  clicks        Click[]
+}
+
+// Modèle pour les équipes (uniquement pour les comptes ENTERPRISE)
+model Team {
+  id            Int      @id @default(autoincrement())
+  name          String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  ownerId       Int      @unique
+  owner         User     @relation("TeamOwner", fields: [ownerId], references: [id])
+
+  members       User[]   @relation("TeamMembers")
+  teamMembers   TeamMember[]
+  links         Link[]
+  invitations   TeamInvitation[]
+}
+
+// Table pivot pour les membres d'une équipe
+model TeamMember {
+  id        Int      @id @default(autoincrement())
+  teamId    Int
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      TeamRole @default(MEMBER)
+  joinedAt  DateTime @default(now())
+
+  @@unique([teamId, userId])
+}
+
+// Modèle pour les invitations à rejoindre une équipe
+model TeamInvitation {
+  id          Int      @id @default(autoincrement())
+  email       String
+  token       String   @unique
+  role        TeamRole @default(MEMBER)
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  teamId      Int
+  team        Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  invitedById Int
+  inviter     User     @relation("Inviter", fields: [invitedById], references: [id])
+}
+
+// Modèle pour les liens raccourcis
+model Link {
+  id          Int      @id @default(autoincrement())
+  short_code  String   @unique
+  long_url    String   @db.Text
+  title       String?
+  click_count Int      @default(0)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+  expires_at  DateTime?
+
+  user_id     Int?
+  user        User?    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  team_id     Int?
+  team        Team?    @relation(fields: [team_id], references: [id], onDelete: Cascade)
+
+  clicks      Click[]
+}
+
+// Modèle pour tracer chaque clic
+model Click {
+  id          Int      @id @default(autoincrement())
+  clicked_at  DateTime @default(now())
+  ip_address  String?
+  user_agent  String?  @db.Text
+  referer     String?  @db.Text
+  country     String?
+  city        String?
+  device_type String?
+  browser     String?
+  os          String?
+  raw_data    Json?    @db.JsonB
+
+  link_id     Int
+  link        Link     @relation(fields: [link_id], references: [id], onDelete: Cascade)
+  
+  user_id     Int? // Si le cliqueur est identifié
+  user        User?    @relation(fields: [user_id], references: [id], onDelete: SetNull)
+}
+
+// Modèle pour les clés d'API
+model ApiKey {
+  id        Int      @id @default(autoincrement())
+  key       String   @unique
+  name      String
+  createdAt DateTime @default(now())
+  lastUsed  DateTime?
+
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Modèle pour la configuration du système (ex: génération de slug)
+model SystemConfig {
+  id                      Int      @id @default(1)
+  slug_generation_length  Int      @default(2)
+  updatedAt               DateTime @updatedAt
+}
+
+enum TeamRole {
+  OWNER
+  ADMIN
+  MEMBER
+}

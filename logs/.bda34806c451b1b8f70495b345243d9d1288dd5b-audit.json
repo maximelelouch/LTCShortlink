@@ -1,0 +1,15 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 14
+    },
+    "auditLog": "C:\\Users\\Lelouch\\shortlink\\logs\\.bda34806c451b1b8f70495b345243d9d1288dd5b-audit.json",
+    "files": [
+        {
+            "date": 1755182600765,
+            "name": "C:\\Users\\Lelouch\\shortlink\\logs\\error-2025-08-14.log",
+            "hash": "9b9d4780644998dc23267ff26a09ec16e3ae87e5864943e83a5efde8f81a1944"
+        }
+    ],
+    "hashType": "sha256"
+}
